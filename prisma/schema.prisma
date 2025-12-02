@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id            Int       @id @default(autoincrement())
+  name          String
+  contactEmail  String?
+  contactPhone  String?
+  createdAt     DateTime  @default(now())
+
+  users         User[]
+  opportunities Opportunity[]
+}
+
+model User {
+  id                     Int        @id @default(autoincrement())
+  organizationId         Int
+  organization           Organization @relation(fields: [organizationId], references: [id])
+
+  name                   String
+  email                  String      @unique
+  phone                  String?
+  role                   String
+  passwordHash           String
+  hasBackgroundCheck     Boolean     @default(false)
+  hasAttendedOrientation Boolean     @default(false)
+  createdAt              DateTime    @default(now())
+
+  shiftSignups           ShiftSignup[]
+  volunteerHours         VolunteerHour[]
+  attendance             Attendance[]   // <-- Correct attendance relation
+}
+
+model Opportunity {
+  id             Int       @id @default(autoincrement())
+  organizationId Int
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  title          String
+  description    String?
+  location       String?
+  createdAt      DateTime  @default(now())
+
+  shifts         Shift[]
+}
+
+model Shift {
+  id             Int       @id @default(autoincrement())
+  opportunityId  Int
+  opportunity    Opportunity @relation(fields: [opportunityId], references: [id])
+
+  startTime      DateTime
+  endTime        DateTime
+  capacity       Int        @default(999999)
+
+  signups        ShiftSignup[]
+  attendance     Attendance[]      // <-- Correct attendance relation
+}
+
+model ShiftSignup {
+  id         Int       @id @default(autoincrement())
+
+  shiftId    Int
+  shift      Shift     @relation(fields: [shiftId], references: [id])
+
+  userId     Int
+  user       User      @relation(fields: [userId], references: [id])
+
+  createdAt  DateTime  @default(now())
+
+  @@unique([shiftId, userId])
+}
+
+model Attendance {
+  id        Int      @id @default(autoincrement())
+
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+
+  shiftId   Int
+  shift     Shift    @relation(fields: [shiftId], references: [id])
+
+  checkIn   DateTime @default(now())
+  checkOut  DateTime?
+
+  createdAt DateTime @default(now())
+}
+
+model VolunteerHour {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  amount      Float
+  description String?
+  createdAt   DateTime @default(now())
+}
