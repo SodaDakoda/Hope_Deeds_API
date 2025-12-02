@@ -1,116 +1,105 @@
+const prisma = require("../prisma");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const dotenv = require("dotenv");
-const prisma = require("../prisma");
-
-dotenv.config();
-
-const JWT_SECRET = process.env.JWT_SECRET;
 
 function makeToken(user) {
   return jwt.sign(
     {
       id: user.id,
-      role: user.role,
       organizationId: user.organizationId,
+      role: user.role,
+      name: user.name,
     },
-    JWT_SECRET,
+    process.env.JWT_SECRET,
     { expiresIn: "7d" }
   );
 }
 
-// POST /api/auth/register
-// body: { name, email, phone?, password, role?, organizationId }
-async function registerUser(req, res, next) {
+// REGISTER ORGANIZATION
+exports.registerOrganization = async (req, res) => {
   try {
-    const { name, email, phone, password, role, organizationId } = req.body;
+    const { name, email, password } = req.body;
 
-    if (!name || !email || !password || !organizationId) {
-      return res.status(400).json({
-        error: "name, email, password, and organizationId are required",
-      });
-    }
+    const hashed = await bcrypt.hash(password, 10);
 
-    const existing = await prisma.user.findUnique({
-      where: { email },
+    const org = await prisma.organization.create({
+      data: {
+        name,
+        contactEmail: email,
+      },
     });
-
-    if (existing) {
-      return res.status(409).json({ error: "Email already in use" });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
 
     const user = await prisma.user.create({
       data: {
-        name,
         email,
-        phone,
-        organizationId: Number(organizationId),
-        passwordHash,
-        role: role || "volunteer", // default
+        passwordHash: hashed,
+        name,
+        role: "admin",
+        organizationId: org.id,
       },
     });
-
-    const token = makeToken(user);
-
-    res.status(201).json({
-      token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        organizationId: user.organizationId,
-      },
-    });
-  } catch (err) {
-    next(err);
-  }
-}
-
-// POST /api/auth/login
-// body: { email, password }
-async function loginUser(req, res, next) {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ error: "email and password are required" });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (!user) {
-      return res.status(401).json({ error: "Invalid email or password" });
-    }
-
-    const valid = await bcrypt.compare(password, user.passwordHash);
-
-    if (!valid) {
-      return res.status(401).json({ error: "Invalid email or password" });
-    }
 
     const token = makeToken(user);
 
     res.json({
+      success: true,
       token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        organizationId: user.organizationId,
-      },
+      organization: org,
+      user,
     });
   } catch (err) {
-    next(err);
+    console.error(err);
+    res.status(400).json({ error: "Registration failed" });
   }
-}
+};
 
-module.exports = {
-  registerUser,
-  loginUser,
+// LOGIN ORGANIZATION
+exports.loginOrganization = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { organization: true },
+    });
+
+    if (!user) return res.status(400).json({ error: "Invalid credentials" });
+
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) return res.status(400).json({ error: "Invalid credentials" });
+
+    const token = makeToken(user);
+
+    res.json({
+      success: true,
+      token,
+      user,
+      organization: user.organization,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ error: "Login failed" });
+  }
+};
+
+// GET CURRENT USER
+exports.getMe = async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: { organization: true },
+    });
+
+    if (!user) return res.status(400).json({ error: "User not found" });
+
+    res.json({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      organization: user.organization,
+    });
+  } catch (err) {
+    res.status(400).json({ error: "Failed to load session" });
+  }
 };
