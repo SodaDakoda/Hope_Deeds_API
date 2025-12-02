@@ -10,13 +10,14 @@ datasource db {
 model Organization {
   id            Int       @id @default(autoincrement())
   name          String
-  contactEmail  String?
+  contactEmail  String     @unique
   contactPhone  String?
   createdAt     DateTime  @default(now())
 
   users         User[]
   opportunities Opportunity[]
 }
+
 
 model User {
   id                     Int        @id @default(autoincrement())
