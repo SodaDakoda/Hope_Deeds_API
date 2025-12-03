@@ -9,9 +9,15 @@ const {
 
 const { authRequired } = require("../middleware/auth");
 
-// ORG AUTH ROUTES
-router.post("/org/register", registerOrganization);
-router.post("/org/login", loginOrganization);
-router.get("/org/me", authRequired, getMe);
+// FRONTEND EXPECTS THESE EXACT ENDPOINTS:
+
+// Register Org
+router.post("/register-org", registerOrganization);
+
+// Login Org
+router.post("/login", loginOrganization);
+
+// Get logged-in org user
+router.get("/me", authRequired, getMe);
 
 module.exports = router;
